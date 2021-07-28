@@ -28,6 +28,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.xwiki.configuration.ConfigurationSource;
+import org.xwiki.contrib.oidc.auth.internal.configuration.DefaultOIDCClientConfiguration;
+import org.xwiki.contrib.oidc.auth.internal.configuration.OIDCClientConfiguration;
 import org.xwiki.test.junit5.mockito.ComponentTest;
 import org.xwiki.test.junit5.mockito.InjectMockComponents;
 import org.xwiki.test.junit5.mockito.MockComponent;
@@ -38,15 +40,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 /**
- * Validate {@link OIDCClientConfiguration}.
+ * Validate {@link DefaultOIDCClientConfiguration}.
  * 
  * @version $Id$
  */
 @ComponentTest
-class OIDCClientConfigurationTest
+class DefaultOIDCClientConfigurationTest
 {
     @InjectMockComponents
-    private OIDCClientConfiguration configuration;
+    private DefaultOIDCClientConfiguration configuration;
 
     @MockComponent
     private ConfigurationSource sourceConfiguration;

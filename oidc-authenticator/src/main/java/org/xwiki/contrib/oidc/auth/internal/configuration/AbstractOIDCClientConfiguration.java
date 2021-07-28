@@ -17,13 +17,12 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.xwiki.contrib.oidc.auth.internal;
+package org.xwiki.contrib.oidc.auth.internal.configuration;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,22 +32,17 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import javax.servlet.http.HttpSession;
 
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.joda.time.LocalDateTime;
 import org.slf4j.Logger;
-import org.xwiki.component.annotation.Component;
-import org.xwiki.configuration.ConfigurationSource;
 import org.xwiki.container.Container;
 import org.xwiki.container.Request;
 import org.xwiki.container.Session;
 import org.xwiki.container.servlet.ServletSession;
-import org.xwiki.contrib.oidc.OIDCIdToken;
-import org.xwiki.contrib.oidc.OIDCUserInfo;
-import org.xwiki.contrib.oidc.internal.OIDCConfiguration;
+import org.xwiki.contrib.oidc.auth.internal.Endpoint;
 import org.xwiki.contrib.oidc.provider.internal.OIDCManager;
 import org.xwiki.contrib.oidc.provider.internal.endpoint.AuthorizationOIDCEndpoint;
 import org.xwiki.contrib.oidc.provider.internal.endpoint.LogoutOIDCEndpoint;
@@ -68,247 +62,41 @@ import com.nimbusds.openid.connect.sdk.OIDCScopeValue;
 import com.nimbusds.openid.connect.sdk.claims.ClaimsSetRequest;
 import com.nimbusds.openid.connect.sdk.claims.IDTokenClaimsSet;
 
-/**
- * Various OpenID Connect authenticator configurations.
- * 
- * @version $Id$
- */
-@Component(roles = OIDCClientConfiguration.class)
-@Singleton
-public class OIDCClientConfiguration extends OIDCConfiguration
+public abstract class AbstractOIDCClientConfiguration implements OIDCClientConfiguration
 {
-    public class GroupMapping
-    {
-        private final Map<String, Set<String>> xwikiMapping;
-
-        private final Map<String, Set<String>> providerMapping;
-
-        public GroupMapping(int size)
-        {
-            this.xwikiMapping = new HashMap<>(size);
-            this.providerMapping = new HashMap<>(size);
-        }
-
-        public Set<String> fromXWiki(String xwikiGroup)
-        {
-            return this.xwikiMapping.get(xwikiGroup);
-        }
-
-        public Set<String> fromProvider(String providerGroup)
-        {
-            return this.providerMapping.get(providerGroup);
-        }
-
-        public Map<String, Set<String>> getXWikiMapping()
-        {
-            return this.xwikiMapping;
-        }
-
-        public Map<String, Set<String>> getProviderMapping()
-        {
-            return this.providerMapping;
-        }
-    }
-
-    public static final String PROP_XWIKIPROVIDER = "oidc.xwikiprovider";
-
-    public static final String PROP_USER_NAMEFORMATER = "oidc.user.nameFormater";
-
-    public static final String DEFAULT_USER_NAMEFORMATER =
-        "${oidc.issuer.host._clean}-${oidc.user.preferredUsername._clean}";
-
-    /**
-     * @since 1.11
-     */
-    public static final String PROP_USER_SUBJECTFORMATER = "oidc.user.subjectFormater";
-
-    /**
-     * @since 1.18
-     */
-    public static final String PROP_USER_MAPPING = "oidc.user.mapping";
-
-    /**
-     * @since 1.11
-     */
-    public static final String DEFAULT_USER_SUBJECTFORMATER = "${oidc.user.subject}";
-
-    public static final String PROPPREFIX_ENDPOINT = "oidc.endpoint.";
-
-    public static final String PROP_ENDPOINT_AUTHORIZATION = PROPPREFIX_ENDPOINT + AuthorizationOIDCEndpoint.HINT;
-
-    public static final String PROP_ENDPOINT_TOKEN = PROPPREFIX_ENDPOINT + TokenOIDCEndpoint.HINT;
-
-    public static final String PROP_ENDPOINT_USERINFO = PROPPREFIX_ENDPOINT + UserInfoOIDCEndpoint.HINT;
-
-    /**
-     * @since 1.21
-     */
-    public static final String PROP_ENDPOINT_LOGOUT = PROPPREFIX_ENDPOINT + LogoutOIDCEndpoint.HINT;
-
-    public static final String PROP_CLIENTID = "oidc.clientid";
-
-    /**
-     * @since 1.13
-     */
-    public static final String PROP_SECRET = "oidc.secret";
-
-    public static final String PROP_SKIPPED = "oidc.skipped";
-
-    /**
-     * @since 1.13
-     */
-    public static final String PROP_ENDPOINT_TOKEN_AUTH_METHOD =
-        PROPPREFIX_ENDPOINT + TokenOIDCEndpoint.HINT + ".auth_method";
-
-    /**
-     * @since 1.13
-     */
-    public static final String PROP_ENDPOINT_USERINFO_METHOD =
-        PROPPREFIX_ENDPOINT + UserInfoOIDCEndpoint.HINT + ".method";
-
-    /**
-     * @since 1.22
-     */
-    public static final String PROP_ENDPOINT_USERINFO_HEADERS =
-        PROPPREFIX_ENDPOINT + UserInfoOIDCEndpoint.HINT + ".headers";
-
-    /**
-     * @since 1.21
-     */
-    public static final String PROP_ENDPOINT_LOGOUT_METHOD = PROPPREFIX_ENDPOINT + LogoutOIDCEndpoint.HINT + ".method";
-
-    /**
-     * @since 1.12
-     */
-    public static final String PROP_USERINFOREFRESHRATE = "oidc.userinforefreshrate";
-
-    /**
-     * @since 1.16
-     */
-    public static final String PROP_SCOPE = "oidc.scope";
-
-    public static final String PROP_USERINFOCLAIMS = "oidc.userinfoclaims";
-
-    public static final List<String> DEFAULT_USERINFOCLAIMS = Arrays.asList(OIDCUserInfo.CLAIM_XWIKI_ACCESSIBILITY,
-        OIDCUserInfo.CLAIM_XWIKI_COMPANY, OIDCUserInfo.CLAIM_XWIKI_DISPLAYHIDDENDOCUMENTS,
-        OIDCUserInfo.CLAIM_XWIKI_EDITOR, OIDCUserInfo.CLAIM_XWIKI_USERTYPE);
-
-    public static final String PROP_IDTOKENCLAIMS = "oidc.idtokenclaims";
-
-    public static final List<String> DEFAULT_IDTOKENCLAIMS = Arrays.asList(OIDCIdToken.CLAIM_XWIKI_INSTANCE_ID);
-
-    /**
-     * @since 1.10
-     */
-    public static final String PROP_GROUPS_MAPPING = "oidc.groups.mapping";
-
-    /**
-     * @since 1.10
-     */
-    public static final String PROP_GROUPS_ALLOWED = "oidc.groups.allowed";
-
-    /**
-     * @since 1.10
-     */
-    public static final String PROP_GROUPS_FORBIDDEN = "oidc.groups.forbidden";
-
-    /**
-     * @since 1.27
-     */
-    public static final String PROP_GROUPS_PREFIX = "oidc.groups.prefix";
-
-    /**
-     * @since 1.27
-     */
-    public static final String PROP_GROUPS_SEPARATOR = "oidc.groups.separator";
-
-    public static final String PROP_INITIAL_REQUEST = "xwiki.initialRequest";
-
-    public static final String PROP_STATE = "oidc.state";
-
-    public static final String PROP_SESSION_ACCESSTOKEN = "oidc.accesstoken";
-
-    public static final String PROP_SESSION_IDTOKEN = "oidc.idtoken";
-
-    public static final String PROP_SESSION_USERINFO_EXPORATIONDATE = "oidc.session.userinfoexpirationdate";
-
-    private static final String XWIKI_GROUP_PREFIX = "XWiki.";
+    @Inject
+    protected Logger logger;
 
     @Inject
-    private InstanceIdManager instance;
+    protected Container container;
 
     @Inject
-    private OIDCManager manager;
+    protected OIDCManager manager;
 
     @Inject
-    private Container container;
+    protected InstanceIdManager instance;
 
     @Inject
-    private ConverterManager converter;
+    protected ConverterManager converter;
 
-    @Inject
-    private Logger logger;
+    /**
+     * @param key the name of the property
+     * @param valueClass the class of the property
+     * @return the property value
+     */
+    protected abstract <T> T getFallbackProperty(String key, Class<T> valueClass);
 
-    @Inject
-    // TODO: store configuration in custom objects
-    private ConfigurationSource configuration;
+    /**
+     * @param key the name of the property
+     * @param def the default value
+     * @return the property value
+     */
+    protected abstract <T> T getFallbackProperty(String key, T def);
 
-    private HttpSession getHttpSession()
-    {
-        Session session = this.container.getSession();
-        if (session instanceof ServletSession) {
-            HttpSession httpSession = ((ServletSession) session).getHttpSession();
-
-            this.logger.debug("Session: {}", httpSession.getId());
-
-            return httpSession;
-        }
-
-        return null;
-    }
-
-    private <T> T getSessionAttribute(String name)
-    {
-        HttpSession session = getHttpSession();
-        if (session != null) {
-            return (T) session.getAttribute(name);
-        }
-
-        return null;
-    }
-
-    private <T> T removeSessionAttribute(String name)
-    {
-        HttpSession session = getHttpSession();
-        if (session != null) {
-            try {
-                return (T) session.getAttribute(name);
-            } finally {
-                session.removeAttribute(name);
-            }
-        }
-
-        return null;
-    }
-
-    private void setSessionAttribute(String name, Object value)
-    {
-        HttpSession session = getHttpSession();
-        if (session != null) {
-            session.setAttribute(name, value);
-        }
-    }
-
-    private String getRequestParameter(String key)
-    {
-        Request request = this.container.getRequest();
-        if (request != null) {
-            return (String) request.getProperty(key);
-        }
-
-        return null;
-    }
-
+    /**
+     * @param key the name of the property
+     * @return the property value
+     */
     public Map<String, String> getMap(String key)
     {
         List<String> list = getProperty(key, List.class);
@@ -332,7 +120,6 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return mapping;
     }
 
-    @Override
     protected <T> T getProperty(String key, Class<T> valueClass)
     {
         // Get property from request
@@ -348,10 +135,9 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         }
 
         // Get property from configuration
-        return this.configuration.getProperty(key, valueClass);
+        return getFallbackProperty(key, valueClass);
     }
 
-    @Override
     protected <T> T getProperty(String key, T def)
     {
         // Get property from request
@@ -367,13 +153,73 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         }
 
         // Get property from configuration
-        return this.configuration.getProperty(key, def);
+        return getFallbackProperty(key, def);
     }
 
-    /**
-     * @since 1.18
-     */
-    public String getSubjectFormater()
+    protected String getRequestParameter(String key)
+    {
+        Request request = this.container.getRequest();
+        if (request != null) {
+            return (String) request.getProperty(key);
+        }
+
+        return null;
+    }
+
+    protected HttpSession getHttpSession()
+    {
+        Session session = this.container.getSession();
+        if (session instanceof ServletSession) {
+            HttpSession httpSession = ((ServletSession) session).getHttpSession();
+
+            this.logger.debug("Session: {}", httpSession.getId());
+
+            return httpSession;
+        }
+
+        return null;
+    }
+
+    protected  <T> T getSessionAttribute(String name)
+    {
+        HttpSession session = getHttpSession();
+        if (session != null) {
+            return (T) session.getAttribute(name);
+        }
+
+        return null;
+    }
+
+    protected  <T> T removeSessionAttribute(String name)
+    {
+        HttpSession session = getHttpSession();
+        if (session != null) {
+            try {
+                return (T) session.getAttribute(name);
+            } finally {
+                session.removeAttribute(name);
+            }
+        }
+
+        return null;
+    }
+
+    protected void setSessionAttribute(String name, Object value)
+    {
+        HttpSession session = getHttpSession();
+        if (session != null) {
+            session.setAttribute(name, value);
+        }
+    }
+
+    @Override
+    public String getGroupClaim()
+    {
+        return getProperty(PROP_GROUPS_CLAIM, DEFAULT_GROUPSCLAIM);
+    }
+
+    @Override
+    public String getSubjectFormatter()
     {
         String userFormatter = getProperty(PROP_USER_SUBJECTFORMATER, String.class);
         if (userFormatter == null) {
@@ -383,10 +229,8 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return userFormatter;
     }
 
-    /**
-     * @since 1.11
-     */
-    public String getXWikiUserNameFormater()
+    @Override
+    public String getXWikiUserNameFormatter()
     {
         String userFormatter = getProperty(PROP_USER_NAMEFORMATER, String.class);
         if (userFormatter == null) {
@@ -396,14 +240,13 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return userFormatter;
     }
 
-    /**
-     * @since 1.18
-     */
+    @Override
     public Map<String, String> getUserMapping()
     {
         return getMap(PROP_USER_MAPPING);
     }
 
+    @Override
     public URL getXWikiProvider()
     {
         return getProperty(PROP_XWIKIPROVIDER, URL.class);
@@ -449,29 +292,31 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return new Endpoint(uri, headers);
     }
 
+    @Override
     public Endpoint getAuthorizationOIDCEndpoint() throws URISyntaxException
     {
         return getEndPoint(AuthorizationOIDCEndpoint.HINT);
     }
 
+    @Override
     public Endpoint getTokenOIDCEndpoint() throws URISyntaxException
     {
         return getEndPoint(TokenOIDCEndpoint.HINT);
     }
 
+    @Override
     public Endpoint getUserInfoOIDCEndpoint() throws URISyntaxException
     {
         return getEndPoint(UserInfoOIDCEndpoint.HINT);
     }
 
-    /**
-     * @since 1.21
-     */
+    @Override
     public Endpoint getLogoutOIDCEndpoint() throws URISyntaxException
     {
         return getEndPoint(LogoutOIDCEndpoint.HINT);
     }
 
+    @Override
     public ClientID getClientID()
     {
         String clientId = getProperty(PROP_CLIENTID, String.class);
@@ -480,9 +325,7 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return new ClientID(clientId != null ? clientId : this.instance.getInstanceId().getInstanceId());
     }
 
-    /**
-     * @since 1.13
-     */
+    @Override
     public Secret getSecret()
     {
         String secret = getProperty(PROP_SECRET, String.class);
@@ -493,9 +336,7 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         }
     }
 
-    /**
-     * @since 1.13
-     */
+    @Override
     public ClientAuthenticationMethod getTokenEndPointAuthMethod()
     {
         String authMethod = getProperty(PROP_ENDPOINT_TOKEN_AUTH_METHOD, String.class);
@@ -506,35 +347,31 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         }
     }
 
-    /**
-     * @since 1.13
-     */
+    @Override
     public HTTPRequest.Method getUserInfoEndPointMethod()
     {
         return getProperty(PROP_ENDPOINT_USERINFO_METHOD, HTTPRequest.Method.GET);
     }
 
-    /**
-     * @since 1.21
-     */
+    @Override
     public HTTPRequest.Method getLogoutEndPointMethod()
     {
         return getProperty(PROP_ENDPOINT_LOGOUT_METHOD, HTTPRequest.Method.GET);
     }
 
+    @Override
     public String getSessionState()
     {
         return getSessionAttribute(PROP_STATE);
     }
 
+    @Override
     public boolean isSkipped()
     {
         return getProperty(PROP_SKIPPED, false);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public OIDCClaimsRequest getClaimsRequest()
     {
         // TODO: allow passing the complete JSON as configuration
@@ -567,34 +404,26 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return claimsRequest;
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public List<String> getIDTokenClaims()
     {
         return getProperty(PROP_IDTOKENCLAIMS, DEFAULT_IDTOKENCLAIMS);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public List<String> getUserInfoClaims()
     {
         return getProperty(PROP_USERINFOCLAIMS, DEFAULT_USERINFOCLAIMS);
     }
 
-    /**
-     * @since 1.12
-     */
+    @Override
     public int getUserInfoRefreshRate()
     {
         return getProperty(PROP_USERINFOREFRESHRATE, 600000);
     }
 
-    /**
-     * @since 1.2
-     */
-    public Scope getScope()
+    @Override
+    public Scope getAuthorizationScope()
     {
         List<String> scopeValues = getProperty(PROP_SCOPE, List.class);
 
@@ -606,9 +435,7 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return new Scope(scopeValues.toArray(new String[0]));
     }
 
-    /**
-     * @since 1.10
-     */
+    @Override
     public GroupMapping getGroupMapping()
     {
         List<String> groupsMapping = getProperty(PROP_GROUPS_MAPPING, List.class);
@@ -626,12 +453,13 @@ public class OIDCClientConfiguration extends OIDCConfiguration
                     String providerGroup = groupMapping.substring(index + 1);
 
                     // Add to XWiki mapping
-                    Set<String> providerGroups = groups.xwikiMapping.computeIfAbsent(xwikiGroup, k -> new HashSet<>());
+                    Set<String>
+                        providerGroups = groups.getXWikiMapping().computeIfAbsent(xwikiGroup, k -> new HashSet<>());
                     providerGroups.add(providerGroup);
 
                     // Add to provider mapping
                     Set<String> xwikiGroups =
-                        groups.providerMapping.computeIfAbsent(providerGroup, k -> new HashSet<>());
+                        groups.getProviderMapping().computeIfAbsent(providerGroup, k -> new HashSet<>());
                     xwikiGroups.add(xwikiGroup);
                 }
             }
@@ -642,17 +470,7 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return groups;
     }
 
-    /**
-     * @since 1.10
-     */
-    public String toXWikiGroup(String group)
-    {
-        return group.startsWith(XWIKI_GROUP_PREFIX) ? group : XWIKI_GROUP_PREFIX + group;
-    }
-
-    /**
-     * @since 1.10
-     */
+    @Override
     public List<String> getAllowedGroups()
     {
         List<String> groups = getProperty(PROP_GROUPS_ALLOWED, List.class);
@@ -660,9 +478,7 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return groups != null && !groups.isEmpty() ? groups : null;
     }
 
-    /**
-     * @since 1.10
-     */
+    @Override
     public List<String> getForbiddenGroups()
     {
         List<String> groups = getProperty(PROP_GROUPS_FORBIDDEN, List.class);
@@ -670,18 +486,14 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         return groups != null && !groups.isEmpty() ? groups : null;
     }
 
-    /**
-     * @since 1.27
-     */
+    @Override
     public String getGroupPrefix()
     {
         String groupPrefix = getProperty(PROP_GROUPS_PREFIX, String.class);
         return groupPrefix != null && !groupPrefix.isEmpty() ? groupPrefix : null;
     }
 
-    /**
-     * @since 1.27
-     */
+    @Override
     public String getGroupSeparator()
     {
         return getProperty(PROP_GROUPS_SEPARATOR, String.class);
@@ -689,25 +501,19 @@ public class OIDCClientConfiguration extends OIDCConfiguration
 
     // Session only
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public Date removeUserInfoExpirationDate()
     {
         return removeSessionAttribute(PROP_SESSION_USERINFO_EXPORATIONDATE);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public void setUserInfoExpirationDate(Date date)
     {
         setSessionAttribute(PROP_SESSION_USERINFO_EXPORATIONDATE, date);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public void resetUserInfoExpirationDate()
     {
         LocalDateTime expiration = LocalDateTime.now().plusMillis(getUserInfoRefreshRate());
@@ -715,64 +521,48 @@ public class OIDCClientConfiguration extends OIDCConfiguration
         setUserInfoExpirationDate(expiration.toDate());
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public BearerAccessToken getAccessToken()
     {
         return getSessionAttribute(PROP_SESSION_ACCESSTOKEN);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public void setAccessToken(BearerAccessToken accessToken)
     {
         setSessionAttribute(PROP_SESSION_ACCESSTOKEN, accessToken);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public IDTokenClaimsSet getIdToken()
     {
         return getSessionAttribute(PROP_SESSION_IDTOKEN);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public void setIdToken(IDTokenClaimsSet idToken)
     {
         setSessionAttribute(PROP_SESSION_IDTOKEN, idToken);
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public URI getSuccessRedirectURI()
     {
         URI uri = getSessionAttribute(PROP_INITIAL_REQUEST);
         if (uri == null) {
-            // TODO: return wiki hope page
+            // TODO: return wiki home page
         }
 
         return uri;
     }
 
-    /**
-     * @since 1.2
-     */
+    @Override
     public void setSuccessRedirectURI(URI uri)
     {
         setSessionAttribute(PROP_INITIAL_REQUEST, uri);
     }
 
-    /**
-     * @return true if groups should be synchronized (in which case if the provider does not answer to the group claim
-     *         it means the user does not belong to any group)
-     * @since 1.14
-     */
+    @Override
     public boolean isGroupSync()
     {
         String groupClaim = getGroupClaim();

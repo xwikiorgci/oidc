@@ -17,40 +17,36 @@
  * Software Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA
  * 02110-1301 USA, or see the FSF site: http://www.fsf.org.
  */
-package org.xwiki.contrib.oidc.internal;
+package org.xwiki.contrib.oidc.auth.internal.configuration;
 
-import org.xwiki.component.annotation.Role;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+
+import org.xwiki.component.annotation.Component;
+import org.xwiki.configuration.ConfigurationSource;
 
 /**
- * Various OpenID Connect configurations commons to both the provider and the authenticator.
- * 
+ * Default configuration for the OIDC Client, which relies on the XWiki Properties configuration as a base reference.
+ *
+ * @since 1.29
  * @version $Id$
- * @since 1.10
  */
-@Role
-public interface OIDCConfiguration
+@Component(roles = OIDCClientConfiguration.class)
+@Singleton
+public class DefaultOIDCClientConfiguration extends AbstractOIDCClientConfiguration
 {
-    /**
-     * The prefix used for OpenID Connect configuration properties.
-     */
-    String PREFIX_PROP = "oidc.";
+    @Inject
+    private ConfigurationSource configuration;
 
-    /**
-     * The name of the claim used to get the groups a user is member of.
-     *
-     * @since 1.10
-     */
-    String PROP_GROUPS_CLAIM = PREFIX_PROP + "groups.claim";
+    @Override
+    protected <T> T getFallbackProperty(String key, Class<T> valueClass)
+    {
+        return this.configuration.getProperty(key, valueClass);
+    }
 
-    /**
-     * The default name of the claim used to get the groups a user is member of.
-     *
-     * @since 1.10
-     */
-    String DEFAULT_GROUPSCLAIM = "xwiki_groups";
-
-    /**
-     * @return the name of the claim used to get the groups a user is member of
-     */
-    String getGroupClaim();
+    @Override
+    protected <T> T getFallbackProperty(String key, T def)
+    {
+        return this.configuration.getProperty(key, def);
+    }
 }

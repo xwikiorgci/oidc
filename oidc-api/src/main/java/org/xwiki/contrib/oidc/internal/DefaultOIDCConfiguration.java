@@ -19,38 +19,34 @@
  */
 package org.xwiki.contrib.oidc.internal;
 
-import org.xwiki.component.annotation.Role;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+
+import org.xwiki.component.annotation.Component;
+import org.xwiki.configuration.ConfigurationSource;
 
 /**
- * Various OpenID Connect configurations commons to both the provider and the authenticator.
- * 
+ * Default implementation of an {@link OIDCConfiguration} for providing utility methods.
+ *
  * @version $Id$
- * @since 1.10
+ * @since 1.29
  */
-@Role
-public interface OIDCConfiguration
+@Component
+@Singleton
+public class DefaultOIDCConfiguration implements OIDCConfiguration
 {
-    /**
-     * The prefix used for OpenID Connect configuration properties.
-     */
-    String PREFIX_PROP = "oidc.";
+    @Inject
+    private ConfigurationSource configuration;
 
-    /**
-     * The name of the claim used to get the groups a user is member of.
-     *
-     * @since 1.10
-     */
-    String PROP_GROUPS_CLAIM = PREFIX_PROP + "groups.claim";
+    @Override
+    public String getGroupClaim()
+    {
+        return getProperty(PROP_GROUPS_CLAIM, DEFAULT_GROUPSCLAIM);
+    }
 
-    /**
-     * The default name of the claim used to get the groups a user is member of.
-     *
-     * @since 1.10
-     */
-    String DEFAULT_GROUPSCLAIM = "xwiki_groups";
-
-    /**
-     * @return the name of the claim used to get the groups a user is member of
-     */
-    String getGroupClaim();
+    protected  <T> T getProperty(String key, T def)
+    {
+        // Get property from configuration
+        return this.configuration.getProperty(key, def);
+    }
 }

@@ -22,6 +22,7 @@ package org.xwiki.contrib.oidc.provider.internal;
 import javax.inject.Singleton;
 
 import org.xwiki.component.annotation.Component;
+import org.xwiki.contrib.oidc.internal.DefaultOIDCConfiguration;
 import org.xwiki.contrib.oidc.internal.OIDCConfiguration;
 
 /**
@@ -32,7 +33,7 @@ import org.xwiki.contrib.oidc.internal.OIDCConfiguration;
  */
 @Component(roles = OIDCProviderConfiguration.class)
 @Singleton
-public class OIDCProviderConfiguration extends OIDCConfiguration
+public class OIDCProviderConfiguration extends DefaultOIDCConfiguration
 {
     /**
      * The prefix used for OpenID Connect Provider configuration properties.
