@@ -25,6 +25,7 @@ import java.util.Objects;
 
 import javax.inject.Inject;
 import javax.inject.Named;
+import javax.inject.Provider;
 import javax.inject.Singleton;
 import javax.servlet.http.HttpSession;
 
@@ -34,7 +35,7 @@ import org.xwiki.component.annotation.Component;
 import org.xwiki.container.Container;
 import org.xwiki.container.servlet.ServletSession;
 import org.xwiki.contrib.oidc.auth.internal.Endpoint;
-import org.xwiki.contrib.oidc.auth.internal.OIDCClientConfiguration;
+import org.xwiki.contrib.oidc.auth.internal.configuration.OIDCClientConfiguration;
 import org.xwiki.contrib.oidc.auth.internal.OIDCUserManager;
 import org.xwiki.contrib.oidc.provider.internal.OIDCException;
 import org.xwiki.contrib.oidc.provider.internal.OIDCManager;
@@ -83,7 +84,7 @@ public class CallbackOIDCEndpoint implements OIDCEndpoint
     private Container container;
 
     @Inject
-    private OIDCClientConfiguration configuration;
+    private Provider<OIDCClientConfiguration> configurationProvider;
 
     @Inject
     private OIDCManager oidc;
@@ -98,13 +99,14 @@ public class CallbackOIDCEndpoint implements OIDCEndpoint
     public Response handle(HTTPRequest httpRequest, OIDCResourceReference reference) throws Exception
     {
         this.logger.debug("OIDC callback: starting with request [{}]", httpRequest.getURL());
+        OIDCClientConfiguration configuration = configurationProvider.get();
 
         // Parse the request
         AuthorizationResponse authorizationResponse = AuthorizationResponse.parse(httpRequest);
 
         // Validate state
         State state = authorizationResponse.getState();
-        if (!Objects.equals(state.getValue(), this.configuration.getSessionState())) {
+        if (!Objects.equals(state.getValue(), configuration.getSessionState())) {
             this.logger.debug("OIDC callback: Invalid state ([{}])", state);
 
             throw new OIDCException("Invalid state [" + state + "]");
@@ -144,22 +146,22 @@ public class CallbackOIDCEndpoint implements OIDCEndpoint
         AuthorizationGrant authorizationGrant = new AuthorizationCodeGrant(code, callback);
 
         TokenRequest tokeRequest;
-        Secret secret = this.configuration.getSecret();
-        Endpoint tokenEndpoint = this.configuration.getTokenOIDCEndpoint();
+        Secret secret = configuration.getSecret();
+        Endpoint tokenEndpoint = configuration.getTokenOIDCEndpoint();
         if (secret != null) {
-            this.logger.debug("OIDC callback: adding secret ({} {})", this.configuration.getClientID(),
+            this.logger.debug("OIDC callback: adding secret ({} {})", configuration.getClientID(),
                 secret.getValue());
 
             ClientAuthentication clientSecret;
-            if (this.configuration.getTokenEndPointAuthMethod() == ClientAuthenticationMethod.CLIENT_SECRET_POST) {
-                clientSecret = new ClientSecretPost(this.configuration.getClientID(), secret);
+            if (configuration.getTokenEndPointAuthMethod() == ClientAuthenticationMethod.CLIENT_SECRET_POST) {
+                clientSecret = new ClientSecretPost(configuration.getClientID(), secret);
             } else {
-                clientSecret = new ClientSecretBasic(this.configuration.getClientID(), secret);
+                clientSecret = new ClientSecretBasic(configuration.getClientID(), secret);
             }
             tokeRequest = new TokenRequest(tokenEndpoint.getURI(), clientSecret, authorizationGrant);
         } else {
             tokeRequest =
-                new TokenRequest(tokenEndpoint.getURI(), this.configuration.getClientID(), authorizationGrant);
+                new TokenRequest(tokenEndpoint.getURI(), configuration.getClientID(), authorizationGrant);
         }
 
         HTTPRequest tokenHTTP = tokeRequest.toHTTPRequest();
@@ -194,8 +196,8 @@ public class CallbackOIDCEndpoint implements OIDCEndpoint
         HttpSession session = ((ServletSession) this.container.getSession()).getHttpSession();
 
         // Store the access token in the session
-        this.configuration.setIdToken(idToken);
-        this.configuration.setAccessToken(accessToken);
+        configuration.setIdToken(idToken);
+        configuration.setAccessToken(accessToken);
 
         // Update/Create XWiki user
         Principal principal = this.users.updateUserInfo(accessToken);
@@ -206,9 +208,9 @@ public class CallbackOIDCEndpoint implements OIDCEndpoint
         // TODO: put enough information in the cookie to automatically authenticate when coming back
 
         this.logger.debug("OIDC callback: principal=[{}]", principal);
-        this.logger.debug("OIDC callback: redirect=[{}]", this.configuration.getSuccessRedirectURI());
+        this.logger.debug("OIDC callback: redirect=[{}]", configuration.getSuccessRedirectURI());
 
         // Redirect to original request
-        return new RedirectResponse(this.configuration.getSuccessRedirectURI());
+        return new RedirectResponse(configuration.getSuccessRedirectURI());
     }
 }

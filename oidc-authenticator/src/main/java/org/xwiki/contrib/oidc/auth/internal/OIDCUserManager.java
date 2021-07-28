@@ -55,7 +55,8 @@ import org.xwiki.component.annotation.Component;
 import org.xwiki.component.manager.ComponentManager;
 import org.xwiki.context.concurrent.ExecutionContextRunnable;
 import org.xwiki.contrib.oidc.OIDCUserInfo;
-import org.xwiki.contrib.oidc.auth.internal.OIDCClientConfiguration.GroupMapping;
+import org.xwiki.contrib.oidc.auth.internal.configuration.OIDCClientConfiguration;
+import org.xwiki.contrib.oidc.auth.internal.configuration.OIDCClientConfiguration.GroupMapping;
 import org.xwiki.contrib.oidc.auth.store.OIDCUserStore;
 import org.xwiki.contrib.oidc.event.OIDCUserEventData;
 import org.xwiki.contrib.oidc.event.OIDCUserUpdated;
@@ -102,7 +103,7 @@ public class OIDCUserManager
     private Provider<XWikiContext> xcontextProvider;
 
     @Inject
-    private OIDCClientConfiguration configuration;
+    private Provider<OIDCClientConfiguration> configurationProvider;
 
     @Inject
     private OIDCUserStore store;
@@ -124,13 +125,12 @@ public class OIDCUserManager
 
     public void updateUserInfoAsync() throws URISyntaxException
     {
-        final Endpoint userInfoEndpoint = this.configuration.getUserInfoOIDCEndpoint();
-        final IDTokenClaimsSet idToken = this.configuration.getIdToken();
-        final BearerAccessToken accessToken = this.configuration.getAccessToken();
+        OIDCClientConfiguration configuration = configurationProvider.get();
 
         this.executor.execute(new ExecutionContextRunnable(() -> {
             try {
-                updateUserInfo(userInfoEndpoint, idToken, accessToken);
+                updateUserInfo(configuration.getUserInfoOIDCEndpoint(), configuration.getIdToken(),
+                    configuration.getAccessToken());
             } catch (Exception e) {
                 logger.error("Failed to update user informations", e);
             }
@@ -139,7 +139,9 @@ public class OIDCUserManager
 
     public void checkUpdateUserInfo()
     {
-        Date date = this.configuration.removeUserInfoExpirationDate();
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
+        Date date = configuration.removeUserInfoExpirationDate();
         if (date != null) {
             if (date.before(new Date())) {
                 try {
@@ -149,10 +151,10 @@ public class OIDCUserManager
                 }
 
                 // Restart user information expiration counter
-                this.configuration.resetUserInfoExpirationDate();
+                configuration.resetUserInfoExpirationDate();
             } else {
                 // Put back the date
-                this.configuration.setUserInfoExpirationDate(date);
+                configuration.setUserInfoExpirationDate(date);
             }
         }
     }
@@ -160,11 +162,13 @@ public class OIDCUserManager
     public Principal updateUserInfo(BearerAccessToken accessToken)
         throws URISyntaxException, IOException, ParseException, OIDCException, XWikiException, QueryException
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
         Principal principal =
-            updateUserInfo(this.configuration.getUserInfoOIDCEndpoint(), this.configuration.getIdToken(), accessToken);
+            updateUserInfo(configuration.getUserInfoOIDCEndpoint(), configuration.getIdToken(), accessToken);
 
         // Restart user information expiration counter
-        this.configuration.resetUserInfoExpirationDate();
+        configuration.resetUserInfoExpirationDate();
 
         return principal;
     }
@@ -172,10 +176,12 @@ public class OIDCUserManager
     public Principal updateUserInfo(Endpoint userInfoEndpoint, IDTokenClaimsSet idToken, BearerAccessToken accessToken)
         throws IOException, ParseException, OIDCException, XWikiException, QueryException
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
         // Get OIDC user info
         this.logger.debug("OIDC user info request ({},{})", userInfoEndpoint, accessToken);
         UserInfoRequest userinfoRequest =
-            new UserInfoRequest(userInfoEndpoint.getURI(), this.configuration.getUserInfoEndPointMethod(), accessToken);
+            new UserInfoRequest(userInfoEndpoint.getURI(), configuration.getUserInfoEndPointMethod(), accessToken);
         HTTPRequest userinfoHTTP = userinfoRequest.toHTTPRequest();
         userInfoEndpoint.prepare(userinfoHTTP);
         this.logger.debug("OIDC user info request ({}?{},{})", userinfoHTTP.getURL(), userinfoHTTP.getQuery(),
@@ -198,18 +204,20 @@ public class OIDCUserManager
 
     private int sendLogout()
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
         int ret = 0;
         Endpoint logoutURI = null;
 
         try {
-            logoutURI = this.configuration.getLogoutOIDCEndpoint();
+            logoutURI = configuration.getLogoutOIDCEndpoint();
         } catch (Exception e) {
             this.logger.error("Failed to generate the logout endpoint URI", e);
         }
 
         if (logoutURI != null) {
             try {
-                ret = sendLogout(logoutURI, this.configuration.getIdToken());
+                ret = sendLogout(logoutURI, configuration.getIdToken());
             } catch (Exception e) {
                 this.logger.error("Failed to send logout request", e);
             }
@@ -237,14 +245,15 @@ public class OIDCUserManager
 
     private void checkAllowedGroups(UserInfo userInfo) throws OIDCException
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
         List<String> providerGroups = null;
-        Object providerGroupsObj = getClaim(this.configuration.getGroupClaim(), userInfo);
-        if (this.configuration.getGroupSeparator()!=null) {
-            providerGroups = Arrays.asList(StringUtils.split(providerGroupsObj.toString(), this.configuration.getGroupSeparator()));
+        Object providerGroupsObj = getClaim(configuration.getGroupClaim(), userInfo);
+        if (configuration.getGroupSeparator()!=null) {
+            providerGroups = Arrays.asList(StringUtils.split(providerGroupsObj.toString(), configuration.getGroupSeparator()));
         } else {
             providerGroups = (List<String>)providerGroupsObj;
         }
-        String groupPrefix = this.configuration.getGroupPrefix();
+        String groupPrefix = configuration.getGroupPrefix();
         if (!StringUtils.isEmpty(groupPrefix)) {
             providerGroups = providerGroups.stream()
                     .filter(item -> item.startsWith(groupPrefix))
@@ -254,7 +263,7 @@ public class OIDCUserManager
         
         if (providerGroups != null) {
             // Check allowed groups
-            List<String> allowedGroups = this.configuration.getAllowedGroups();
+            List<String> allowedGroups = configuration.getAllowedGroups();
             if (allowedGroups != null) {
                 if (!CollectionUtils.containsAny(providerGroups, allowedGroups)) {
                     // Allowed groups have priority over forbidden groups
@@ -267,7 +276,7 @@ public class OIDCUserManager
             }
 
             // Check forbidden groups
-            List<String> forbiddenGroups = this.configuration.getForbiddenGroups();
+            List<String> forbiddenGroups = configuration.getForbiddenGroups();
             if (forbiddenGroups != null && CollectionUtils.containsAny(providerGroups, forbiddenGroups)) {
                 throw new OIDCException(
                     "The user is not allowed to authenticate because it's a member of one of the following groups: "
@@ -318,6 +327,8 @@ public class OIDCUserManager
     public Principal updateUser(IDTokenClaimsSet idToken, UserInfo userInfo)
         throws XWikiException, QueryException, OIDCException
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
         // Check allowed/forbidden groups
         checkAllowedGroups(userInfo);
 
@@ -450,7 +461,7 @@ public class OIDCUserManager
         }
 
         // Sync user groups with the provider
-        if (this.configuration.isGroupSync()) {
+        if (configuration.isGroupSync()) {
             userUpdated = updateGroupMembership(userInfo, userDocument, xcontext);
         }
 
@@ -465,7 +476,9 @@ public class OIDCUserManager
     private void updateUserMapping(XWikiDocument userDocument, BaseClass userClass, BaseObject userObject,
         XWikiContext xcontext, StringSubstitutor substitutor)
     {
-        Map<String, String> mapping = this.configuration.getUserMapping();
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
+        Map<String, String> mapping = configuration.getUserMapping();
         if (mapping != null) {
             for (Map.Entry<String, String> entry : mapping.entrySet()) {
                 String xwikiProperty = entry.getKey();
@@ -481,18 +494,20 @@ public class OIDCUserManager
     private boolean updateGroupMembership(UserInfo userInfo, XWikiDocument userDocument, XWikiContext xcontext)
         throws XWikiException
     {
-        String groupClaim = this.configuration.getGroupClaim();
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
+        String groupClaim = configuration.getGroupClaim();
 
         this.logger.debug("Getting groups sent by the provider associated with claim [{}]", groupClaim);
 
         List<String> providerGroups = null;
-        Object providerGroupsObj = getClaim(this.configuration.getGroupClaim(), userInfo);
-        if (this.configuration.getGroupSeparator()!=null) {
-            providerGroups = Arrays.asList(StringUtils.split(providerGroupsObj.toString(), this.configuration.getGroupSeparator()));
+        Object providerGroupsObj = getClaim(configuration.getGroupClaim(), userInfo);
+        if (configuration.getGroupSeparator()!=null) {
+            providerGroups = Arrays.asList(StringUtils.split(providerGroupsObj.toString(), configuration.getGroupSeparator()));
         } else {
             providerGroups = (List<String>)providerGroupsObj;
         }
-        String groupPrefix = this.configuration.getGroupPrefix();
+        String groupPrefix = configuration.getGroupPrefix();
         if (!StringUtils.isEmpty(groupPrefix)) {
             providerGroups = providerGroups.stream()
                     .filter(item -> item.startsWith(groupPrefix))
@@ -603,6 +618,8 @@ public class OIDCUserManager
     public Boolean syncXWikiGroupsMembership(String xwikiUserName, List<String> providerGroups, XWikiContext context)
         throws XWikiException
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
+
         Boolean userUpdated = false;
         this.logger.debug("Updating group membership for the user [{}]", xwikiUserName);
 
@@ -611,12 +628,12 @@ public class OIDCUserManager
 
         this.logger.debug("The user belongs to following XWiki groups: {}", xwikiUserGroupList);
 
-        GroupMapping groupMapping = this.configuration.getGroupMapping();
+        GroupMapping groupMapping = configuration.getGroupMapping();
 
         // Add missing group membership
         for (String providerGroupName : providerGroups) {
             if (groupMapping == null) {
-                String xwikiGroup = this.configuration.toXWikiGroup(providerGroupName);
+                String xwikiGroup = configuration.toXWikiGroup(providerGroupName);
                 if (!xwikiUserGroupList.contains(xwikiGroup)) {
                     addUserToXWikiGroup(xwikiUserName, xwikiGroup, context);
                     userUpdated = true;
@@ -755,6 +772,7 @@ public class OIDCUserManager
 
     private Map<String, String> createFormatMap(IDTokenClaimsSet idToken, UserInfo userInfo)
     {
+        OIDCClientConfiguration configuration = this.configurationProvider.get();
         Map<String, String> formatMap = new HashMap<>();
 
         // User informations
@@ -769,7 +787,7 @@ public class OIDCUserManager
         putVariable(formatMap, "oidc.user.givenName", userInfo.getGivenName());
 
         // Provider (only XWiki OIDC providers)
-        URL providerURL = this.configuration.getXWikiProvider();
+        URL providerURL = configuration.getXWikiProvider();
         if (providerURL != null) {
             putVariable(formatMap, "oidc.provider", providerURL.toString());
             putVariable(formatMap, "oidc.provider.host", providerURL.getHost());
@@ -811,12 +829,12 @@ public class OIDCUserManager
 
     private String formatXWikiUserName(StringSubstitutor substitutor)
     {
-        return substitutor.replace(this.configuration.getXWikiUserNameFormater());
+        return substitutor.replace(this.configurationProvider.get().getXWikiUserNameFormatter());
     }
 
     private String formatSubjec(StringSubstitutor substitutor)
     {
-        return substitutor.replace(this.configuration.getSubjectFormater());
+        return substitutor.replace(this.configurationProvider.get().getSubjectFormatter());
     }
 
     public void logout()

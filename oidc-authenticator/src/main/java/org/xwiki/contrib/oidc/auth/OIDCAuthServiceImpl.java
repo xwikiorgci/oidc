@@ -38,7 +38,7 @@ import org.xwiki.container.servlet.filters.SavedRequestManager;
 import org.xwiki.context.Execution;
 import org.xwiki.context.ExecutionContext;
 import org.xwiki.contrib.oidc.auth.internal.Endpoint;
-import org.xwiki.contrib.oidc.auth.internal.OIDCClientConfiguration;
+import org.xwiki.contrib.oidc.auth.internal.configuration.OIDCClientConfiguration;
 import org.xwiki.contrib.oidc.auth.internal.OIDCUserManager;
 import org.xwiki.contrib.oidc.auth.internal.endpoint.CallbackOIDCEndpoint;
 import org.xwiki.contrib.oidc.provider.internal.OIDCManager;
@@ -240,7 +240,7 @@ public class OIDCAuthServiceImpl extends XWikiAuthServiceImpl
         // Create the request URL
         ResponseType responseType = ResponseType.getDefault();
         AuthenticationRequest.Builder requestBuilder = new AuthenticationRequest.Builder(responseType,
-            this.configuration.getScope(), this.configuration.getClientID(), callback);
+            this.configuration.getAuthorizationScope(), this.configuration.getClientID(), callback);
         requestBuilder.endpointURI(this.configuration.getAuthorizationOIDCEndpoint().getURI());
 
         // Claims
