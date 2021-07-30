@@ -1,5 +1,5 @@
 org.xwiki.contrib.oidc.auth.internal.configuration.ContextOIDCClientConfigurationProvider
-org.xwiki.contrib.oidc.auth.internal.configuration.DefaultOIDCClientConfiguration
+1500:org.xwiki.contrib.oidc.auth.internal.configuration.DefaultOIDCClientConfiguration
 org.xwiki.contrib.oidc.auth.internal.configuration.OIDCClientConfigurationClassDocumentInitializer
 org.xwiki.contrib.oidc.auth.internal.configuration.WikiOIDCClientConfigurationComponentBuilder
 org.xwiki.contrib.oidc.auth.internal.OIDCUserManager
