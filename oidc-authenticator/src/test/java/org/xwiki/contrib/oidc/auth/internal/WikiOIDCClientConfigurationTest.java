@@ -96,7 +96,8 @@ class WikiOIDCClientConfigurationTest
 
         xobject = new Object(baseObject, xWikiContext);
 
-        wikiOIDCClientConfiguration = new WikiOIDCClientConfiguration(authorReference, xobject, componentManager);
+        wikiOIDCClientConfiguration = new WikiOIDCClientConfiguration(authorReference, xobject, logger,
+            componentManager);
     }
 
     @Test

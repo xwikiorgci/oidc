@@ -21,6 +21,8 @@ package org.xwiki.contrib.oidc.auth.internal.configuration;
 
 import java.lang.reflect.Type;
 import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
 import org.slf4j.Logger;
 import org.xwiki.component.manager.ComponentLookupException;
@@ -33,6 +35,7 @@ import org.xwiki.instance.InstanceIdManager;
 import org.xwiki.model.reference.DocumentReference;
 import org.xwiki.model.reference.LocalDocumentReference;
 import org.xwiki.properties.ConverterManager;
+import org.xwiki.text.StringUtils;
 
 import com.xpn.xwiki.api.Object;
 
@@ -78,18 +81,19 @@ public class WikiOIDCClientConfiguration extends AbstractOIDCClientConfiguration
      *
      * @param authorReference the reference of the author creating the component
      * @param xobject the object holding the component configuration
+     * @param logger the logger to use
      * @param componentManager the component manager
      * @throws ComponentLookupException if the initialization failed
      */
     public WikiOIDCClientConfiguration(DocumentReference authorReference,
-        Object xobject, ComponentManager componentManager) throws ComponentLookupException
+        Object xobject, Logger logger, ComponentManager componentManager) throws ComponentLookupException
     {
         this.documentReference = xobject.getDocumentReference();
         this.authorReference = authorReference;
         this.xobject = xobject;
         this.componentManager = componentManager;
+        this.logger = logger;
 
-        this.logger = componentManager.getInstance(Logger.class);
         this.container = componentManager.getInstance(Container.class);
         this.manager = componentManager.getInstance(OIDCManager.class);
         this.instance = componentManager.getInstance(InstanceIdManager.class);
@@ -129,12 +133,33 @@ public class WikiOIDCClientConfiguration extends AbstractOIDCClientConfiguration
     @Override
     protected <T> T getFallbackProperty(String key, Class<T> valueClass)
     {
-        return converter.convert(valueClass, xobject.getValue(key));
+        java.lang.Object value = xobject.getValue(key);
+
+        if (value instanceof String && StringUtils.isBlank((String) value)) {
+            return null;
+        }
+
+        return (value != null) ? converter.convert(valueClass, value) : null;
     }
 
     @Override
     protected <T> T getFallbackProperty(String key, T def)
     {
-        return converter.convert(def.getClass(), xobject.getValue(key));
+        Class<?> classType = def.getClass();
+        // Handle specific cases where we cannot use def.getClass() directly on the converter
+        if (def instanceof List) {
+            classType = List.class;
+        } else if (def instanceof Map) {
+            classType = Map.class;
+        }
+
+        java.lang.Object value = xobject.getValue(key);
+
+        if (value instanceof String && StringUtils.isBlank((String) value)) {
+            return null;
+        }
+
+        return (value != null) ? converter.convert(classType, value)
+            : converter.convert(classType, StringUtils.EMPTY);
     }
 }

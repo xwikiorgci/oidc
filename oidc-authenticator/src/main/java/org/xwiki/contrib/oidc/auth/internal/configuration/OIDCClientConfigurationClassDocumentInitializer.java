@@ -77,5 +77,9 @@ public class OIDCClientConfigurationClassDocumentInitializer extends AbstractMan
         xclass.addTextField(OIDCClientConfiguration.PROP_ENDPOINT_LOGOUT_METHOD,
             "Logout endpoint method", 255);
         xclass.addBooleanField(OIDCClientConfiguration.PROP_SKIPPED, "Is authentication skipped ?");
+        xclass.addTextField(OIDCClientConfiguration.PROP_SCOPE, "Scope", 255);
+        xclass.addTextField(OIDCClientConfiguration.PROP_IDTOKENCLAIMS, "ID Token Claims", 255);
+        xclass.addTextField(OIDCClientConfiguration.PROP_USERINFOCLAIMS, "User info Claims", 255);
+
     }
 }

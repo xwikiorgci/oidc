@@ -23,13 +23,14 @@ import javax.inject.Inject;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
 
 import org.xwiki.component.annotation.Component;
 import org.xwiki.component.manager.ComponentManager;
 import org.xwiki.configuration.ConfigurationSource;
-import org.xwiki.container.Container;
 import org.xwiki.contrib.oidc.internal.OIDCConfiguration;
+
+import com.xpn.xwiki.XWikiContext;
+import com.xpn.xwiki.web.XWikiServletRequest;
 
 /**
  * Provide the {@link OIDCClientConfiguration} corresponding to the current context.
@@ -38,7 +39,7 @@ import org.xwiki.contrib.oidc.internal.OIDCConfiguration;
  * <ul>
  *     <li>The provider will first check if a cookie defined in CLIENT_CONFIGURATION_COOKIE_PROPERTY exists, forcing
  *     the use of a given client configuration.</li>
- *     <li>If no cookie is defined, or if a cookie is defined but no configuartion exist with this name, the provider
+ *     <li>If no cookie is defined, or if a cookie is defined but no configuration exist with this name, the provider
  *     will fallback on the configuration defined in DEFAULT_CLIENT_CONFIGURATION_PROPERTY.</li>
  *     <li>If the fallback configuration does not exist, the provider will fallback on the default configuration
  *     available through the component manager.</li>
@@ -77,10 +78,10 @@ public class ContextOIDCClientConfigurationProvider implements Provider<OIDCClie
     private ConfigurationSource configurationSource;
 
     @Inject
-    private Container container;
+    private ComponentManager componentManager;
 
     @Inject
-    private ComponentManager componentManager;
+    private Provider<XWikiContext> contextProvider;
 
     @Override
     public OIDCClientConfiguration get()
@@ -93,14 +94,13 @@ public class ContextOIDCClientConfigurationProvider implements Provider<OIDCClie
 
         try {
             // Check if a cookie exists, indicating which configuration to use
-            if (container.getRequest() instanceof HttpServletRequest) {
-                HttpServletRequest request = (HttpServletRequest) container.getRequest();
+            XWikiContext context = contextProvider.get();
+            if (context.getRequest() instanceof XWikiServletRequest) {
+                XWikiServletRequest request = (XWikiServletRequest) context.getRequest();
 
-                for (Cookie cookie : request.getCookies()) {
-                    if (cookieName.equals(cookie.getName())
-                        && componentManager.hasComponent(OIDCClientConfiguration.class, cookie.getValue())) {
-                        return componentManager.getInstance(OIDCClientConfiguration.class, cookie.getValue());
-                    }
+                Cookie cookie = request.getCookie(cookieName);
+                if (cookie != null && componentManager.hasComponent(OIDCClientConfiguration.class, cookie.getValue())) {
+                    return componentManager.getInstance(OIDCClientConfiguration.class, cookie.getValue());
                 }
             }
 

@@ -115,6 +115,9 @@ class OIDCUserManagerTest
     ConverterManager converterManager;
 
     @MockComponent
+    OIDCClientConfiguration oidcClientConfiguration;
+
+    @MockComponent
     @Named("XWiki.XWikiRights")
     MandatoryDocumentInitializer rightsInitializer;
 
@@ -249,7 +252,7 @@ class OIDCUserManagerTest
         userClassDocument.getXClass().apply(userClass, true);
         this.oldcore.getSpyXWiki().saveDocument(userClassDocument, this.oldcore.getXWikiContext());
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertEquals("xwiki:XWiki.issuer-preferredUserName", principal.getName());
 
@@ -296,7 +299,7 @@ class OIDCUserManagerTest
 
         userInfo.setClaim(OIDCClientConfiguration.DEFAULT_GROUPSCLAIM, Arrays.asList("pgroup1", "pgroup2"));
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertEquals("xwiki:XWiki.issuer-subject", principal.getName());
 
@@ -348,7 +351,7 @@ class OIDCUserManagerTest
         assertFalse(groupContains(this.group2Reference, userFullName));
         assertTrue(groupContains(this.existinggroupReference, userFullName));
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertEquals("xwiki:XWiki.issuer-subject", principal.getName());
 
@@ -403,7 +406,7 @@ class OIDCUserManagerTest
         assertFalse(groupContains(this.group2Reference, userFullName));
         assertTrue(groupContains(this.existinggroupReference, userFullName));
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertEquals("xwiki:XWiki.issuer-subject", principal.getName());
 
@@ -456,7 +459,7 @@ class OIDCUserManagerTest
         userInfo.setZoneinfo("timezone");
         userInfo.setWebsite(new URI("http://website"));
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertEquals("xwiki:XWiki.custom-mail@domain\\.com-MAIL@DOMAIN\\.COM-MAILDOMAINCOM", principal.getName());
 
@@ -501,7 +504,7 @@ class OIDCUserManagerTest
 
         userInfo.setClaim("groupclaim", Arrays.asList("pgroup1", "pgroup3"));
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertNotNull(principal);
     }
@@ -525,7 +528,7 @@ class OIDCUserManagerTest
 
         userInfo.setClaim("groupclaim", Arrays.asList("pgroup2", "pgroup3"));
 
-        assertThrows(OIDCException.class, () -> this.manager.updateUser(idToken, userInfo));
+        assertThrows(OIDCException.class, () -> this.manager.updateUser(oidcClientConfiguration, idToken, userInfo));
     }
 
     @Test
@@ -547,7 +550,7 @@ class OIDCUserManagerTest
 
         userInfo.setClaim("groupclaim", Arrays.asList("pgroup1", "pgroup3"));
 
-        assertThrows(OIDCException.class, () -> this.manager.updateUser(idToken, userInfo));
+        assertThrows(OIDCException.class, () -> this.manager.updateUser(oidcClientConfiguration, idToken, userInfo));
     }
 
     @Test
@@ -569,7 +572,7 @@ class OIDCUserManagerTest
 
         userInfo.setClaim("groupclaim", Arrays.asList("pgroup2", "pgroup3"));
 
-        Principal principal = this.manager.updateUser(idToken, userInfo);
+        Principal principal = this.manager.updateUser(oidcClientConfiguration, idToken, userInfo);
 
         assertNotNull(principal);
     }
@@ -595,23 +598,23 @@ class OIDCUserManagerTest
         this.oldcore.getConfigurationSource().setProperty(OIDCClientConfiguration.PROP_GROUPS_CLAIM, "groupclaim");
         userInfo.setClaim("groupclaim", Arrays.asList("pgroup1", "pgroup3"));
 
-        assertNotNull(this.manager.updateUser(idToken, userInfo));
+        assertNotNull(this.manager.updateUser(oidcClientConfiguration, idToken, userInfo));
 
         userInfo.setClaim("groupclaim", Arrays.asList("otherpgroup1", "otherpgroup3"));
 
-        assertThrows(OIDCException.class, () -> this.manager.updateUser(idToken, userInfo),
+        assertThrows(OIDCException.class, () -> this.manager.updateUser(oidcClientConfiguration, idToken, userInfo),
             "The user is not allowed to authenticate because it's not a member of the following groups: [pgroup1, pgroup2]");
 
         this.oldcore.getConfigurationSource().setProperty(OIDCClientConfiguration.PROP_GROUPS_CLAIM,
             "custom.customgroupclaim");
         userInfo.setClaim("custom", Collections.singletonMap("customgroupclaim", Arrays.asList("pgroup1", "pgroup3")));
 
-        assertNotNull(this.manager.updateUser(idToken, userInfo));
+        assertNotNull(this.manager.updateUser(oidcClientConfiguration, idToken, userInfo));
 
         userInfo.setClaim("custom",
             Collections.singletonMap("customgroupclaim", Arrays.asList("otherpgroup1", "otherpgroup3")));
 
-        assertThrows(OIDCException.class, () -> this.manager.updateUser(idToken, userInfo),
+        assertThrows(OIDCException.class, () -> this.manager.updateUser(oidcClientConfiguration, idToken, userInfo),
             "The user is not allowed to authenticate because it's not a member of the following groups: [pgroup1, pgroup2]");
     }
 }
